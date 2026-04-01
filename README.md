@@ -36,6 +36,7 @@ The Stellar LayerZero implementation maintains the same four-step messaging flow
 
 
 Stellar-Specific Design Considerations
+
 The implementation addresses four major Stellar/Soroban constraints:
 
 - **bytes32 Address Format**: Stellar uses variable-length addresses while LayerZero V2 uses fixed bytes32. LayerZero treats all OApp addresses as contract addresses.
