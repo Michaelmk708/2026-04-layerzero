@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+  "contracts/onesig",
+  "tests/mock_vault",
+]
+
+[workspace.dependencies]
+soroban-sdk = {version = "25.1.1", features = ["hazmat-address", "hazmat-crypto"]}
+common-macros = { path = "../../../contracts/protocol/stellar/contracts/common-macros" }
+utils = { path = "../../../contracts/protocol/stellar/contracts/utils" }
+
+# Fast dev builds for testing
+[profile.dev]
+opt-level = 0
+incremental = true
+codegen-units = 256
+
+# Optimize dependencies even in dev (compile once, run many tests)
+[profile.dev.package."*"]
+opt-level = 2
+
+# Test profile optimizations
+[profile.test]
+opt-level = 1
+incremental = true
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+# For more information about this profile see https://soroban.stellar.org/docs/basic-tutorials/logging#cargotoml-profile
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
