@@ -19,7 +19,7 @@
 
 _Anything included in this section is considered a publicly known issue and is therefore ineligible for awards._
 
-- [Pending list of informational issues]
+Not applicable.
 
 # Overview
 
