@@ -282,6 +282,7 @@ impl EndpointV2 {
 #[cfg(test)]
 mod test {
     use super::*;
+    use soroban_sdk::{testutils::Address as _, testutils::BytesN as _, testutils::Ledger};
 
     impl EndpointV2 {
         /// Test-only wrapper for empty_payload_hash.
@@ -333,5 +334,50 @@ mod test {
         ) {
             Self::insert_and_drain_pending_nonces(env, receiver, src_eid, sender, new_nonce)
         }
+    }
+
+    
+    
+    // We only need ONE dummy contract in the file
+    #[soroban_sdk::contract]
+    pub struct MockContextContract;
+    
+    #[soroban_sdk::contractimpl]
+    impl MockContextContract {
+        pub fn empty() {}
+    }
+
+    #[test]
+    #[should_panic(expected = "PayloadHashNotFound")] 
+    fn test_poc_ttl_timebomb_payload_expiry() {
+        let env = Env::default();
+        let contract_id = env.register(MockContextContract, ());
+
+        env.as_contract(&contract_id, || {
+            // 1. SETUP: Initialize default TTL configs (using the external utils crate)
+            utils::ttl_configurable::init_default_ttl_configs(&env);
+
+            let receiver = Address::generate(&env);
+            let sender = BytesN::random(&env);
+            let src_eid = 1;
+            let nonce = 1;
+            
+            // Dummy data for the message
+            let payload = Bytes::from_array(&env, &[0; 32]);
+            let payload_hash = keccak256(&env, &payload);
+
+            // 2. THE COMMIT: Store the hash in Persistent Storage
+            EndpointV2::inbound_for_test(&env, &receiver, src_eid, &sender, nonce, &payload_hash);
+
+            // 3. THE TIME SKIP: Fast forward the blockchain by 31 days (535,680 ledgers)
+            env.ledger().set_sequence_number(env.ledger().sequence() + 535_680);
+
+            // 4. THE FLAWED MACRO: Fires and extends Instance TTL, but forgets Persistent TTL
+            utils::ttl_configurable::extend_instance_ttl(&env);
+
+            // 5. THE TRIGGER: Legitimate user tries to execute.
+            // Soroban should have deleted the payload hash because the TTL ran out!
+            EndpointV2::clear_payload_for_test(&env, &receiver, src_eid, &sender, nonce, &payload);
+        });
     }
 }
