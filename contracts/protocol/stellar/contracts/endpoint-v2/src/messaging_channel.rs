@@ -337,47 +337,35 @@ mod test {
     }
 
     
-    
-    // We only need ONE dummy contract in the file
-    #[soroban_sdk::contract]
-    pub struct MockContextContract;
-    
-    #[soroban_sdk::contractimpl]
-    impl MockContextContract {
-        pub fn empty() {}
-    }
+ // ==========================================
+    // 🚨 POC: SOFT CENSORSHIP VIA 100% FEE HIKE 🚨
+    // ==========================================
 
     #[test]
-    #[should_panic(expected = "PayloadHashNotFound")] 
-    fn test_poc_ttl_timebomb_payload_expiry() {
+    fn test_poc_soft_censorship_fee_hike() {
         let env = Env::default();
-        let contract_id = env.register(MockContextContract, ());
+        let admin = Address::generate(&env);
+        
+        // Register the Treasury contract
+        let treasury_id = env.register_contract(None, Treasury);
+        let treasury_client = TreasuryClient::new(&env, &treasury_id);
 
-        env.as_contract(&contract_id, || {
-            // 1. SETUP: Initialize default TTL configs (using the external utils crate)
-            utils::ttl_configurable::init_default_ttl_configs(&env);
+        treasury_client.__constructor(&admin);
 
-            let receiver = Address::generate(&env);
-            let sender = BytesN::random(&env);
-            let src_eid = 1;
-            let nonce = 1;
-            
-            // Dummy data for the message
-            let payload = Bytes::from_array(&env, &[0; 32]);
-            let payload_hash = keccak256(&env, &payload);
+        // 1. THE ATTACK: Admin maliciously or accidentally hikes fee to 100%
+        env.mock_all_auths();
+        treasury_client.set_native_fee_bp(&10000); // 10,000 bps = 100%
 
-            // 2. THE COMMIT: Store the hash in Persistent Storage
-            EndpointV2::inbound_for_test(&env, &receiver, src_eid, &sender, nonce, &payload_hash);
+        // 2. THE TRIGGER: User requests a quote for a cross-chain message
+        let sender = Address::generate(&env);
+        let dst_eid = 2;
+        let total_native_fee = 50_000_000; // Let's say 50 XLM is required for worker gas
+        
+        // Calculate the Treasury's cut
+        let treasury_cut = treasury_client.get_fee(&sender, &dst_eid, &total_native_fee, &false);
 
-            // 3. THE TIME SKIP: Fast forward the blockchain by 31 days (535,680 ledgers)
-            env.ledger().set_sequence_number(env.ledger().sequence() + 535_680);
-
-            // 4. THE FLAWED MACRO: Fires and extends Instance TTL, but forgets Persistent TTL
-            utils::ttl_configurable::extend_instance_ttl(&env);
-
-            // 5. THE TRIGGER: Legitimate user tries to execute.
-            // Soroban should have deleted the payload hash because the TTL ran out!
-            EndpointV2::clear_payload_for_test(&env, &receiver, src_eid, &sender, nonce, &payload);
-        });
+        // 3. THE RESULT: The Treasury extracted 100% of the worker fee!
+        // This makes the transaction cost double for the user, acting as soft-censorship.
+        assert_eq!(treasury_cut, 50_000_000);
     }
 }

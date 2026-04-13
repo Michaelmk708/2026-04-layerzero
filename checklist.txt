@@ -1,0 +1,48 @@
+# AUDIT: LayerZero V2 on Stellar (Soroban)
+# PRIZE POOL: $101,000 USDC
+# DATES: April 1 - April 14, 2026
+
+## 1. THE WEAPONS (Soroban Constraints)
+ 1: 200 Read Limit per Tx (Look for: Unbounded loops, Vec iterations)
+ 2: TTL Storage Expiry (Look for: Missing `extend_ttl` on critical state)
+ 3: bytes32 vs Variable Strings (Look for: Truncation/padding in address casting)
+4: No Reentrancy / Pull-Mode (Look for: Authorization bypasses in `endpoint.clear()`)
+
+## 2. THE TARGETS (Invariants to Break)
+INV-1: Endpoint owner cannot censor user messages.
+INV-2: ULN / Treasury owner cannot censor via native fee manipulation.
+INV-3: DVN cannot suffer a replay attack (double execution).
+INV-4: Critical state (payload hashes) must never be lost.
+
+## 3. THE HIT LIST (Target Files based on Areas of Concern)
+
+### Target A: The Routing & Nonce Engine
+* File: `endpoint-v2/src/messaging_channel.rs` (214 SLoC)
+* Threat: 200 Read Limit DoS. Can we bloat the pending nonce list?
+* Threat: Replay attack. Are nonces cleared securely after execution?
+
+### Target B: The TTL Timebomb
+* Files: `common-macros/src/contract_ttl.rs` & `utils/src/ttl_configurable.rs`
+* Threat: State Expiry. Do payload hashes drop from persistent storage if delayed?
+
+### Target C: Soft Censorship
+* File: `message-libs/treasury/src/treasury.rs`
+* Threat: Can the admin crank up the native token fees to permanently block a specific user or path?
+
+### Target D: Authorization Bypass (Abstract Accounts)
+* Files: `workers/dvn/src/auth.rs` & `utils/src/auth.rs`
+* Threat: Because Soroban blocks reentrancy, they use custom `__check_auth`. Is it spoof-proof?
+
+
+
+checklist
+## 3. THE HIT LIST (Target Files based on Areas of Concern)
+
+### [SECURE] Target A: The Routing & Nonce Engine
+* File: `endpoint-v2/src/messaging_channel.rs` (214 SLoC)
+* Threat: 200 Read Limit / Compute Exhaustion DoS.
+* Result: Tested via `test_poc_nonce_queue_compute_exhaustion`. Max queue size of 256 consumes ~460k instructions (0.5% of budget). Safe.
+
+
+###[bug]target b:the ttl timebomb
+

@@ -1,6 +1,10 @@
 # LayerZero audit details
 - Total Prize Pool: $101,000 in USDC
     - HM awards: up to $89,760 in USDC
+    high = 10points
+    medium=7
+    low=5
+    3*10+5*7=65/90*89760
         - If no valid Highs or Mediums are found, the HM pool is $0
     - QA awards: $3,740 in USDC
     - Judge awards: $7,000 in USDC

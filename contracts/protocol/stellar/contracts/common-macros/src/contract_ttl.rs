@@ -29,6 +29,7 @@ pub fn contractimpl_with_ttl(attr: TokenStream, input: TokenStream) -> TokenStre
         } else {
             // Inject TTL extension at the start of other methods
             method.block.stmts.insert(0, extend_instance_ttl_stmt(&env_param));
+            
         }
     }
 

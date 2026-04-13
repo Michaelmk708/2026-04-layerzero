@@ -1,11 +1,5 @@
 # Code4Arena LayerZero Audit Report Writing Guide
 
-## How to Maximize Your Award in the Code4Arena LayerZero Bounty
-
-This guide teaches you how to write winning security reports for the LayerZero V2 Stellar implementation audit ($101,000 prize pool). Follow these principles to increase your chances of earning the maximum award.
-
----
-
 ## 1. Understanding the Audit Landscape
 
 ### Prize Distribution

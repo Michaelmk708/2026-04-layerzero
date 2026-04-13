@@ -1,0 +1,5 @@
+-recon(scope)
+-threat modelling
+-threat analysis
+-poc
+-report
